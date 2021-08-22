@@ -20,19 +20,21 @@ class FantasyData:
         for year in self.years:
             print(f'*******{year} season*******')
             for period in range(1,17):
-                print(f'Getting data for week {period}...')
+                print(f'Getting data for week {period}...', end='\r')
                 self.payload['scoringPeriodId'] = period
                 r = requests.get(self.base_url(year), cookies=cookies, params=self.payload)
                 json = r.json()
                 if isinstance(json, list):
                     json = json[0]
                 #self.save_json(json, year, period)
-                period_matchups = self.get_matchup_data(json, period)
+                period_matchups = self.get_matchup_data(json, period, year)
                 all_matchups += period_matchups
+                print(f'Getting data for week {period}...', end='\r')
+            print('Done                       ')
 
         return all_matchups
 
-    def get_matchup_data(self, json, period=None):
+    def get_matchup_data(self, json, period, year):
         matchups = []
         
         for game in json['schedule']:
@@ -44,7 +46,7 @@ class FantasyData:
                 continue
             winner_stats = self.get_stats(winner)
             loser_stats = self.get_stats(loser)
-            matchups.append({'winner': winner_stats, 'loser': loser_stats})
+            matchups.append({'time': f'week {period} {year}', 'winner': winner_stats, 'loser': loser_stats})
 
         return matchups
 
@@ -62,17 +64,12 @@ class FantasyData:
     def save_json(self, json, year, period):
         pickle.dump(json, open(f'data/{year}_{period}.pkl', 'wb'))
 
-    def explore(self, i):
-        for d in self.data[i]:
-            print(d)
-            print(self.data[i][d])
-
     def get_stats(self, team):
         raise NotImplementedError
 
 
 class NewFantasyData(FantasyData):
-    def __init__(self, years):
+    def __init__(self, years=[2018,2019,2020]):
         super().__init__(years)
         for year in self.years:
             if year < 2018 or year > 2020:
@@ -86,7 +83,7 @@ class NewFantasyData(FantasyData):
     def get_stats(self, team):
         total_score = team['totalPoints']
         owner = team_id[team['teamId']]
-        player_scores = {}
+        player_info = {}
 
         for player in team['rosterForCurrentScoringPeriod']['entries']:
             l_id = player['lineupSlotId']
@@ -97,9 +94,10 @@ class NewFantasyData(FantasyData):
             p_id = player['playerPoolEntry']['player']['defaultPositionId']
             position = position_id[p_id]
             score = player['playerPoolEntry']['appliedStatTotal']
+            info = {'score': score} 
 
             if lineup_pos == 'FLEX':
-                score = {'score': score, 'position': position}
+                info['position'] = position
             elif lineup_pos == 'QB':
                 if score > 0:
                     stats = player['playerPoolEntry']['player']['stats'][0]
@@ -110,47 +108,19 @@ class NewFantasyData(FantasyData):
                     td_points = stats['4'] if '4' in stats else 0
                 else:
                     td_points = 0
+                info['td_points'] = td_points
                 score = {'score': score, 'td_points': td_points}
             
-            if lineup_pos not in player_scores:
-                player_scores[lineup_pos] = [score]
+            if lineup_pos not in player_info:
+                player_info[lineup_pos] = [info]
             else:
-                player_scores[lineup_pos].append(score)
+                player_info[lineup_pos].append(info)
 
-        return {'owner': owner, 'total': total_score, 'players': player_scores}
+        return {'owner': owner, 'total': total_score, 'players': player_info}
 
-    def check_6pt_passing_tds(self):
-        new_outcomes = 0
-        for matchup in self.data:
-            winner = matchup['winner']
-            loser = matchup['loser']
-
-            winner_score = winner['total']
-            loser_score = loser['total']
-            
-            if 'QB' in winner['players']:
-                winner_qb_td_points = winner['players']['QB'][0]['td_points']
-                winner_extra_points = (winner_qb_td_points/4)*2
-            else:
-                winner_extra_points = 0
-            
-            if 'QB' in loser['players']:
-                loser_qb_td_points = loser['players']['QB'][0]['td_points']
-                loser_extra_points = (loser_qb_td_points/4)*2
-            else:
-                loser_extra_points = 0
-
-            if loser_score + loser_extra_points > winner_score + winner_extra_points:
-                new_outcomes += 1
-
-        print(f'Changed: {new_outcomes}')
-        print(f'Total: {len(self.data)}')
-        print(f'Percent: {(new_outcomes/len(self.data))*100:.2f}%')
-        return None
     
-
 class OldFantasyData(FantasyData):
-    def __init__(self, years):
+    def __init__(self, years=[2014,2015,2016,2017]):
         super().__init__(years)
         for year in self.years:
             if year < 2014 or year > 2017:
@@ -163,16 +133,17 @@ class OldFantasyData(FantasyData):
     def get_stats(self, team):
         total_score = team['totalPoints']
         owner = team_id[team['teamId']]
-        player_scores = {}
+        player_info = {}
 
         for player in team['rosterForMatchupPeriod']['entries']:
             p_id = player['playerPoolEntry']['player']['defaultPositionId']
             position = position_id[p_id]
             score = player['playerPoolEntry']['appliedStatTotal']
+            info = {'score': score}
 
-            if position not in player_scores:
-                player_scores[position] = [score]
+            if position not in player_info:
+                player_info[position] = [info]
             else:
-                player_scores[position].append(score)
+                player_info[position].append(info)
 
-        return {'owner': owner, 'total': total_score, 'players': player_scores}
+        return {'owner': owner, 'total': total_score, 'players': player_info}
