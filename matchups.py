@@ -62,7 +62,7 @@ class FantasyData:
         return winner, loser
 
     def save_json(self, json, year, period):
-        pickle.dump(json, open(f'data/{year}_{period}.pkl', 'wb'))
+        pickle.dump(json, open(f'raw_data/{year}_{period}.pkl', 'wb'))
 
     def get_stats(self, team):
         raise NotImplementedError

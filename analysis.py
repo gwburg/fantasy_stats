@@ -42,7 +42,7 @@ def check_6pt_passing_tds(years=[2018, 2019, 2020]):
     print(f'Total: {len(data)}')
     print(f'Percent: {(new_outcomes/len(data))*100:.2f}%')
 
-def win_correlation(years=[2014,2015,2016,2017,2018,2019,2020]):
+def positional_data_win_correlation(years, data_fn, x_label, y_label='Margin of victory/defeat'):
     data = get_processed_data(years)
     positions = ['QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'D/ST']
     #positions = ['QB']
@@ -50,7 +50,7 @@ def win_correlation(years=[2014,2015,2016,2017,2018,2019,2020]):
     f = plt.figure()
     f.suptitle(str(years).replace('[','').replace(']',''))
     for i,pos in enumerate(positions):
-        x, y = get_data(data, pos)
+        x, y = data_fn(data, pos)
         fit = np.polyfit(x,y,1)
         fit_fn = np.poly1d(fit)
 
@@ -58,8 +58,8 @@ def win_correlation(years=[2014,2015,2016,2017,2018,2019,2020]):
         plt.title(pos)
         plt.scatter(x, y, color='goldenrod', marker='.')
         plt.plot(x, fit_fn(x), 'k')
-        plt.xlabel('Total points scored')
-        plt.ylabel('Margin of victory/defeat')
+        plt.xlabel(x_label)
+        plt.ylabel(y_label)
 
         corr = np.corrcoef(x,y)
         text = f'correlation = {corr[0][1]:.3f}'
@@ -67,7 +67,13 @@ def win_correlation(years=[2014,2015,2016,2017,2018,2019,2020]):
 
     plt.show()
 
-def get_data(data, position):
+def positional_matchup_correlation(years=[2018,2019,2020]):
+    positional_data_win_correlation(years, get_score_diffs, 'Point margin in positional matchup')
+
+def positional_score_correlation(years=[2018,2019,2020]):
+    positional_data_win_correlation(years, get_scores, 'Points scored')
+
+def get_scores(data, position):
     x = []
     y = []
 
@@ -87,6 +93,25 @@ def get_data(data, position):
 
     return x,y
 
+def get_score_diffs(data, position):
+    x = []
+    y = []
+
+    for matchup in data:
+        score_w = matchup['winner']['total']
+        score_l = matchup['loser']['total']
+
+        pos_score_w = get_position_score(matchup, 'winner', position)
+        pos_score_l = get_position_score(matchup, 'loser', position)
+
+        if pos_score_w and pos_score_l:
+            x.append(pos_score_w - pos_score_l)
+            y.append(score_w - score_l)
+            x.append(pos_score_l - pos_score_w)
+            y.append(score_l - score_w)
+
+    return x,y
+
 def get_position_score(matchup, team, position):
     if position not in matchup[team]['players']:
         return None
@@ -102,7 +127,7 @@ def save_processed_data():
     fd_new = NewFantasyData()
     data = fd_old.data + fd_new.data
 
-    pickle.dump(data, open('processed_data.pkl', 'wb'))
+    #pickle.dump(data, open('processed_data.pkl', 'wb'))
 
 def get_processed_data(years=[2014, 2015, 2017, 2018, 2019, 2020]):
     if not isinstance(years, list):
