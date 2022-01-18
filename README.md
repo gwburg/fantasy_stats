@@ -1,3 +1,3 @@
 # fantasy_stats
 
-Pulls data from ESPN fantasy API and does some specific analyses
+Pulls historical data from ESPN fantasy football API and does some specific analyses
